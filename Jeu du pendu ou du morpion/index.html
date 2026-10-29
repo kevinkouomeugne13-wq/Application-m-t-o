@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="fr" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arcade Fun - Morpion & Le Pendu</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+        
+        * {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* Glassmorphism effects */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+
+        .dark .glass-card {
+            background: rgba(30, 41, 59, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* Custom Animations */
+        @keyframes popIn {
+            0% { transform: scale(0.8); opacity: 0; }
+            70% { transform: scale(1.05); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .animate-pop {
+            animation: popIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        @keyframes drawPath {
+            to { stroke-dashoffset: 0; }
+        }
+
+        .draw-svg {
+            stroke-dasharray: 200;
+            stroke-dashoffset: 200;
+            animation: drawPath 0.4s ease-out forwards;
+        }
+
+        /* Floating background elements */
+        .bg-blob {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(70px);
+            z-index: 0;
+            opacity: 0.4;
+            animation: float 10s infinite alternate ease-in-out;
+        }
+
+        @keyframes float {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(30px, 40px) scale(1.1); }
+        }
+    </style>
+</head>
+<body class="h-full bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 transition-colors duration-300 flex flex-col justify-between overflow-x-hidden min-h-screen">
+
+    <!-- Background decorative blobs -->
+    <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
+        <div class="bg-blob bg-indigo-400 dark:bg-indigo-700 w-80 h-80 top-10 -left-20"></div>
+        <div class="bg-blob bg-pink-400 dark:bg-rose-700 w-96 h-96 -bottom-20 -right-20 animation-delay-2000"></div>
+        <div class="bg-blob bg-amber-300 dark:bg-amber-600 w-72 h-72 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"></div>
+    </div>
+
+    <!-- Header Navigation -->
+    <header class="relative z-10 w-full max-w-5xl mx-auto px-4 pt-4 sm:pt-6">
+        <div class="glass-card rounded-2xl p-3 sm:p-4 shadow-lg flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20">
+                    <i data-lucide="gamepad-2" class="w-6 h-6"></i>
+                </div>
+                <h1 class="text-xl sm:text-2xl font-extrabold bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+                    Mini-Arcade
+                </h1>
+            </div>
+
+            <!-- Game Switcher Tabs -->
+            <div class="flex bg-slate-200/80 dark:bg-slate-800/80 p-1 rounded-xl">
+                <button id="tab-morpion" onclick="switchGame('morpion')" class="flex items-center space-x-2 px-3 sm:px-5 py-2 rounded-lg font-bold text-sm transition-all duration-200 shadow-sm bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400">
+                    <i data-lucide="grid" class="w-4 h-4"></i>
+                    <span>Morpion</span>
+                </button>
+                <button id="tab-pendu" onclick="switchGame('pendu')" class="flex items-center space-x-2 px-3 sm:px-5 py-2 rounded-lg font-bold text-sm transition-all duration-200 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">
+                    <i data-lucide="type" class="w-4 h-4"></i>
+                    <span>Le Pendu</span>
+                </button>
+            </div>
+
+            <!-- Options (Sound & Dark mode toggle) -->
+            <div class="flex items-center space-x-2">
+                <button id="sound-btn" onclick="toggleSound()" class="p-2.5 rounded-xl hover:bg-slate-200/60 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors" title="Couper/Activer le son">
+                    <i data-lucide="volume-2" id="sound-icon" class="w-5 h-5"></i>
+                </button>
+                <button id="theme-btn" onclick="toggleTheme()" class="p-2.5 rounded-xl hover:bg-slate-200/60 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors" title="Thème sombre/clair">
+                    <i data-lucide="moon" id="theme-icon" class="w-5 h-5"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="relative z-10 w-full max-w-4xl mx-auto px-4 py-6 flex-grow flex items-center justify-center">
+
+        <!-- ================= MORPION GAME ================= -->
+        <section id="sec-morpion" class="w-full glass-card rounded-3xl p-6 sm:p-8 shadow-2xl transition-all duration-300">
+            <!-- Game Title & Mode Bar -->
+            <div class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
+                <div>
+                    <h2 class="text-2xl font-bold flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
+                        <i data-lucide="grid"></i> Morpion (Tic-Tac-Toe)
+                    </h2>
+                    <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400">Alignez 3 symboles identiques pour l'emporter !</p>
+                </div>
+
+                <!-- Game Mode Selector -->
+                <div class="flex items-center bg-slate-200 dark:bg-slate-800 p-1 rounded-xl text-xs sm:text-sm font-semibold">
+                    <button id="morpion-mode-pvp" onclick="setMorpionMode('pvp')" class="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-sm transition">
+                        👥 2 Joueurs
+                    </button>
+                    <button id="morpion-mode-easy" onclick="setMorpionMode('easy')" class="px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-400 transition">
+                        🤖 IA Facile
+                    </button>
+                    <button id="morpion-mode-hard" onclick="setMorpionMode('hard')" class="px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-400 transition">
+                        🧠 IA imbattable
+                    </button>
+                </div>
+            </div>
+
+            <!-- Scoreboard -->
+            <div class="grid grid-cols-3 gap-3 sm:gap-4 mb-8 text-center">
+                <div class="p-3 sm:p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800">
+                    <p class="text-xs uppercase font-bold tracking-wider text-indigo-500 dark:text-indigo-400" id="morpion-p1-label">Joueur X</p>
+                    <p class="text-2xl sm:text-3xl font-extrabold text-indigo-700 dark:text-indigo-300" id="score-morpion-x">0</p>
+                </div>
+                <div class="p-3 sm:p-4 rounded-2xl bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                    <p class="text-xs uppercase font-bold tracking-wider text-slate-500 dark:text-slate-400">Égalités</p>
+                    <p class="text-2xl sm:text-3xl font-extrabold text-slate-700 dark:text-slate-300" id="score-morpion-draw">0</p>
+                </div>
+                <div class="p-3 sm:p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800">
+                    <p class="text-xs uppercase font-bold tracking-wider text-rose-500 dark:text-rose-400" id="morpion-p2-label">Joueur O</p>
+                    <p class="text-2xl sm:text-3xl font-extrabold text-rose-700 dark:text-rose-300" id="score-morpion-o">0</p>
+                </div>
+            </div>
+
+            <!-- Current Turn Indicator -->
+            <div id="morpion-turn-indicator" class="text-center font-bold text-base sm:text-lg mb-6 flex items-center justify-center gap-2 text-indigo-600 dark:text-indigo-400">
+                Tour du joueur <span id="morpion-current-player" class="inline-block px-3 py-1 bg-indigo-100 dark:bg-indigo-900 rounded-lg text-indigo-700 dark:text-indigo-200 font-extrabold">X</span>
+            </div>
+
+            <!-- Grid Container -->
+            <div class="max-w-[320px] sm:max-w-[360px] mx-auto aspect-square grid grid-cols-3 gap-3 p-3 bg-slate-200 dark:bg-slate-800 rounded-2xl shadow-inner relative">
+                <!-- Cells generated dynamically or static below -->
+                <button onclick="morpionClick(0)" class="morpion-cell rounded-xl bg-white dark:bg-slate-900 shadow hover:shadow-md transition flex items-center justify-center text-4xl sm:text-5xl font-black text-slate-700 dark:text-slate-200 focus:outline-none"></button>
+                <button onclick="morpionClick(1)" class="morpion-cell rounded-xl bg-white dark:bg-slate-900 shadow hover:shadow-md transition flex items-center justify-center text-4xl sm:text-5xl font-black text-slate-700 dark:text-slate-200 focus:outline-none"></button>
+                <button onclick="morpionClick(2)" class="morpion-cell rounded-xl bg-white dark:bg-slate-900 shadow hover:shadow-md transition flex items-center justify-center text-4xl sm:text-5xl font-black text-slate-700 dark:text-slate-200 focus:outline-none"></button>
+                <button onclick="morpionClick(3)" class="morpion-cell rounded-xl bg-white dark:bg-slate-900 shadow hover:shadow-md transition flex items-center justify-center text-4xl sm:text-5xl font-black text-slate-700 dark:text-slate-200 focus:outline-none"></button>
+                <button onclick="morpionClick(4)" class="morpion-cell rounded-xl bg-white dark:bg-slate-900 shadow hover:shadow-md transition flex items-center justify-center text-4xl sm:text-5xl font-black text-slate-700 dark:text-slate-200 focus:outline-none"></button>
+                <button onclick="morpionClick(5)" class="morpion-cell rounded-xl bg-white dark:bg-slate-900 shadow hover:shadow-md transition flex items-center justify-center text-4xl sm:text-5xl font-black text-slate-700 dark:text-slate-200 focus:outline-none"></button>
+                <button onclick="morpionClick(6)" class="morpion-cell rounded-xl bg-white dark:bg-slate-900 shadow hover:shadow-md transition flex items-center justify-center text-4xl sm:text-5xl font-black text-slate-700 dark:text-slate-200 focus:outline-none"></button>
+                <button onclick="morpionClick(7)" class="morpion-cell rounded-xl bg-white dark:bg-slate-900 shadow hover:shadow-md transition flex items-center justify-center text-4xl sm:text-5xl font-black text-slate-700 dark:text-slate-200 focus:outline-none"></button>
+                <button onclick="morpionClick(8)" class="morpion-cell rounded-xl bg-white dark:bg-slate-900 shadow hover:shadow-md transition flex items-center justify-center text-4xl sm:text-5xl font-black text-slate-700 dark:text-slate-200 focus:outline-none"></button>
+            </div>
+
+            <!-- Controls -->
+            <div class="flex justify-center gap-4 mt-8">
+                <button onclick="resetMorpionBoard()" class="px-5 py-2.5 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold transition flex items-center gap-2">
+                    <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Recommencer
+                </button>
+                <button onclick="resetMorpionScores()" class="px-5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 font-semibold transition text-sm">
+                    Réinitialiser score
+                </button>
+            </div>
+        </section>
+
+        <!-- ================= JEU DU PENDU ================= -->
+        <section id="sec-pendu" class="w-full glass-card rounded-3xl p-6 sm:p-8 shadow-2xl transition-all duration-300 hidden">
+            <!-- Header section with category & streak -->
+            <div class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
+                <div>
+                    <h2 class="text-2xl font-bold flex items-center gap-2 text-purple-600 dark:text-purple-400">
+                        <i data-lucide="type"></i> Le Jeu du Pendu
+                    </h2>
+                    <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400">Devinez le mot secret avant d'être pendu !</p>
+                </div>
+
+                <!-- Category selector -->
+                <div class="flex items-center gap-2">
+                    <span class="text-xs font-bold text-slate-500 uppercase">Thème:</span>
+                    <select id="pendu-category-select" onchange="initPenduGame()" class="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-sm rounded-xl px-3 py-2 border border-slate-200 dark:border-slate-700 focus:outline-none">
+                        <option value="ALL">🔀 Tous les thèmes</option>
+                        <option value="animaux">🦁 Animaux</option>
+                        <option value="pays">🌍 Pays & Capitales</option>
+                        <option value="fruits">🍎 Fruits & Légumes</option>
+                        <option value="tech">💻 Informatique</option>
+                        <option value="metiers">👩‍🚒 Métiers</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Score & Streak -->
+            <div class="flex justify-between items-center bg-slate-100/80 dark:bg-slate-800/60 p-4 rounded-2xl mb-6 border border-slate-200 dark:border-slate-700">
+                <div class="flex items-center gap-2">
+                    <span class="text-slate-500 dark:text-slate-400 text-xs sm:text-sm font-bold uppercase">Série de victoires:</span>
+                    <span id="pendu-streak" class="text-xl font-extrabold text-amber-500 flex items-center gap-1">
+                        0 🔥
+                    </span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="usePenduHint()" id="btn-hint" class="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-xs font-bold hover:bg-amber-200 transition">
+                        <i data-lucide="lightbulb" class="w-4 h-4"></i> Indice (-1 essai)
+                    </button>
+                    <button onclick="initPenduGame()" class="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-xs font-bold hover:bg-indigo-200 transition">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i> Passer
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+                <!-- SVG Hangman Drawing -->
+                <div class="md:col-span-5 flex justify-center items-center bg-slate-50 dark:bg-slate-900/60 rounded-2xl p-4 border border-slate-200 dark:border-slate-800">
+                    <svg id="hangman-svg" viewBox="0 0 200 220" class="w-48 h-56 stroke-slate-800 dark:stroke-slate-100 fill-none stroke-[4] stroke-linecap-round stroke-linejoin-round">
+                        <!-- Step 1: Base -->
+                        <line id="hang-1" x1="20" y1="200" x2="180" y2="200" class="opacity-10" />
+                        <!-- Step 2: Post -->
+                        <line id="hang-2" x1="50" y1="200" x2="50" y2="20" class="opacity-10" />
+                        <!-- Step 3: Beam -->
+                        <line id="hang-3" x1="50" y1="20" x2="130" y2="20" class="opacity-10" />
+                        <!-- Step 4: Rope -->
+                        <line id="hang-4" x1="130" y1="20" x2="130" y2="50" class="opacity-10" />
+                        <!-- Step 5: Head -->
+                        <circle id="hang-5" cx="130" cy="70" r="20" class="opacity-10" />
+                        <!-- Step 6: Body -->
+                        <line id="hang-6" x1="130" y1="90" x2="130" y2="140" class="opacity-10" />
+                        <!-- Step 7: Left Arm -->
+                        <line id="hang-7" x1="130" y1="105" x2="105" y2="125" class="opacity-10" />
+                        <!-- Step 8: Right Arm -->
+                        <line id="hang-8" x1="130" y1="105" x2="155" y2="125" class="opacity-10" />
+                        <!-- Step 9: Left Leg -->
+                        <line id="hang-9" x1="130" y1="140" x2="105" y2="175" class="opacity-10" />
+                        <!-- Step 10: Right Leg -->
+                        <line id="hang-10" x1="130" y1="140" x2="155" y2="175" class="opacity-10" />
+                    </svg>
+                </div>
+
+                <!-- Secret Word & Keyboard Display -->
+                <div class="md:col-span-7 flex flex-col justify-between space-y-6">
+                    <!-- Word Container -->
+                    <div class="text-center py-4">
+                        <div id="pendu-word-container" class="flex flex-wrap justify-center gap-2 tracking-widest text-3xl sm:text-4xl font-mono font-black text-indigo-600 dark:text-indigo-400 min-h-[50px]">
+                            <!-- Letter slots populated via JS -->
+                        </div>
+                        <p id="pendu-hint-text" class="text-xs italic text-amber-600 dark:text-amber-400 mt-2 h-4"></p>
+                    </div>
+
+                    <!-- Virtual Keyboard -->
+                    <div id="pendu-keyboard" class="grid grid-cols-7 sm:grid-cols-9 gap-1.5 sm:gap-2 max-w-lg mx-auto">
+                        <!-- Keys A-Z inserted via JS -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="relative z-10 py-4 text-center text-xs text-slate-500 dark:text-slate-400">
+        Jeu interactif codé avec soin • Support clavier physique actif
+    </footer>
+
+    <!-- Result Modal (Shared for Win/Loss) -->
+    <div id="game-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="glass-card max-w-md w-full rounded-3xl p-6 sm:p-8 text-center shadow-2xl scale-95 transition-transform duration-300 transform id='modal-card'">
+            <div id="modal-icon" class="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center text-3xl mb-4 bg-indigo-100 text-indigo-600">
+                🏆
+            </div>
+            <h3 id="modal-title" class="text-2xl font-black mb-2 text-slate-800 dark:text-white">Victoire !</h3>
+            <p id="modal-message" class="text-slate-600 dark:text-slate-300 mb-6 font-medium text-sm sm:text-base">Bravo, vous avez remporté la partie.</p>
+            <button id="modal-action-btn" onclick="closeModal()" class="w-full py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/30 transition">
+                Continuer
+            </button>
+        </div>
+    </div>
+
+    <script>
+        /* ===================================================================
+           1. GLOBAL AUDIO SYNTHESIZER (Web Audio API - No External Files)
+           =================================================================== */
+        let audioCtx = null;
+        let soundEnabled = true;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function playSound(type) {
+            if (!soundEnabled) return;
+            initAudio();
+            if (!audioCtx) return;
+
+            const now = audioCtx.currentTime;
+
+            if (type === 'click') {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(400, now);
+                osc.frequency.exponentialRampToValueAtTime(800, now + 0.05);
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.05);
+            } else if (type === 'win') {
+                [261.63, 329.63, 392.00, 523.25].forEach((freq, idx) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, now + idx * 0.1);
+                    gain.gain.setValueAtTime(0.2, now + idx * 0.1);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.1 + 0.3);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now + idx * 0.1);
+                    osc.stop(now + idx * 0.1 + 0.3);
+                });
+            } else if (type === 'lose') {
+                [300, 260, 220, 180].forEach((freq, idx) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(freq, now + idx * 0.12);
+                    gain.gain.setValueAtTime(0.15, now + idx * 0.12);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + idx * 0.12 + 0.2);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now + idx * 0.12);
+                    osc.stop(now + idx * 0.12 + 0.2);
+                });
+            } else if (type === 'wrong') {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(150, now);
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.15);
+            }
+        }
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            const icon = document.getElementById('sound-icon');
+            if (soundEnabled) {
+                icon.setAttribute('data-lucide', 'volume-2');
+            } else {
+                icon.setAttribute('data-lucide', 'volume-x');
+            }
+            lucide.createIcons();
+        }
+
+        function toggleTheme() {
+            document.documentElement.classList.toggle('dark');
+            const icon = document.getElementById('theme-icon');
+            if (document.documentElement.classList.contains('dark')) {
+                icon.setAttribute('data-lucide', 'sun');
+            } else {
+                icon.setAttribute('data-lucide', 'moon');
+            }
+            lucide.createIcons();
+        }
+
+        /* Navigation Switcher */
+        let currentGame = 'morpion';
+        function switchGame(game) {
+            playSound('click');
+            currentGame = game;
+            const tabMorpion = document.getElementById('tab-morpion');
+            const tabPendu = document.getElementById('tab-pendu');
+            const secMorpion = document.getElementById('sec-morpion');
+            const secPendu = document.getElementById('sec-pendu');
+
+            if (game === 'morpion') {
+                tabMorpion.className = 'flex items-center space-x-2 px-3 sm:px-5 py-2 rounded-lg font-bold text-sm transition-all duration-200 shadow-sm bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400';
+                tabPendu.className = 'flex items-center space-x-2 px-3 sm:px-5 py-2 rounded-lg font-bold text-sm transition-all duration-200 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white';
+                secMorpion.classList.remove('hidden');
+                secPendu.classList.add('hidden');
+            } else {
+                tabPendu.className = 'flex items-center space-x-2 px-3 sm:px-5 py-2 rounded-lg font-bold text-sm transition-all duration-200 shadow-sm bg-white dark:bg-slate-700 text-purple-600 dark:text-purple-400';
+                tabMorpion.className = 'flex items-center space-x-2 px-3 sm:px-5 py-2 rounded-lg font-bold text-sm transition-all duration-200 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white';
+                secPendu.classList.remove('hidden');
+                secMorpion.classList.add('hidden');
+                if (penduWord === '') initPenduGame();
+            }
+        }
+
+        /* Modal system */
+        function showModal(title, message, iconStr, callback) {
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-message').innerHTML = message;
+            document.getElementById('modal-icon').innerText = iconStr;
+            const modal = document.getElementById('game-modal');
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+
+            const btn = document.getElementById('modal-action-btn');
+            btn.onclick = () => {
+                closeModal();
+                if (callback) callback();
+            };
+        }
+
+        function closeModal() {
+            playSound('click');
+            const modal = document.getElementById('game-modal');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+        }
+
+        /* ===================================================================
+           2. MORPION (TIC-TAC-TOE) LOGIC
+           =================================================================== */
+        let morpionBoard = ['', '', '', '', '', '', '', '', ''];
+        let morpionCurrentPlayer = 'X';
+        let morpionGameActive = true;
+        let morpionMode = 'pvp'; // 'pvp', 'easy', 'hard'
+        let morpionScores = { X: 0, O: 0, draw: 0 };
+
+        const winningConditions = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8], // Rows
+            [0, 3, 6], [1, 4, 7], [2, 5, 8], // Cols
+            [0, 4, 8], [2, 4, 6]             // Diagonals
+        ];
+
+        function setMorpionMode(mode) {
+            playSound('click');
+            morpionMode = mode;
+            ['pvp', 'easy', 'hard'].forEach(m => {
+                const btn = document.getElementById(`morpion-mode-${m}`);
+                if (m === mode) {
+                    btn.className = 'px-3 py-1.5 rounded-lg bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-sm transition';
+                } else {
+                    btn.className = 'px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-400 transition';
+                }
+            });
+
+            const p2Label = document.getElementById('morpion-p2-label');
+            if (mode === 'pvp') p2Label.innerText = 'Joueur O';
+            else if (mode === 'easy') p2Label.innerText = 'IA Facile';
+            else p2Label.innerText = 'IA Expert';
+
+            resetMorpionBoard();
+        }
+
+        function morpionClick(index) {
+            if (morpionBoard[index] !== '' || !morpionGameActive) return;
+
+            makeMorpionMove(index, morpionCurrentPlayer);
+
+            if (morpionGameActive && morpionMode !== 'pvp' && morpionCurrentPlayer === 'O') {
+                setTimeout(aiMakeMove, 300);
+            }
+        }
+
+        function makeMorpionMove(index, player) {
+            playSound('click');
+            morpionBoard[index] = player;
+            const cells = document.getElementsByClassName('morpion-cell');
+            cells[index].innerText = player;
+            cells[index].classList.add('animate-pop');
+            if (player === 'X') {
+                cells[index].classList.add('text-indigo-600', 'dark:text-indigo-400');
+            } else {
+                cells[index].classList.add('text-rose-500', 'dark:text-rose-400');
+            }
+
+            checkMorpionResult();
+        }
+
+        function checkMorpionResult() {
+            let roundWon = false;
+            let winningCombo = null;
+
+            for (let i = 0; i < winningConditions.length; i++) {
+                const [a, b, c] = winningConditions[i];
+                if (morpionBoard[a] && morpionBoard[a] === morpionBoard[b] && morpionBoard[a] === morpionBoard[c]) {
+                    roundWon = true;
+                    winningCombo = winningConditions[i];
+                    break;
+                }
+            }
+
+            if (roundWon) {
+                morpionGameActive = false;
+                morpionScores[morpionCurrentPlayer]++;
+                updateMorpionScoreboard();
+                highlightWinningCells(winningCombo);
+                playSound('win');
+
+                const winnerName = morpionMode !== 'pvp' && morpionCurrentPlayer === 'O' 
+                    ? 'L\'IA' 
+                    : `Joueur ${morpionCurrentPlayer}`;
+
+                setTimeout(() => {
+                    showModal('Victoire ! 🎉', `${winnerName} a remporté le match.`, '🏆', resetMorpionBoard);
+                }, 500);
+                return;
+            }
+
+            if (!morpionBoard.includes('')) {
+                morpionGameActive = false;
+                morpionScores.draw++;
+                updateMorpionScoreboard();
+                playSound('wrong');
+                setTimeout(() => {
+                    showModal('Égalité ! 🤝', 'Personne n\'a réussi à faire aligner 3 symboles.', '⚖️', resetMorpionBoard);
+                }, 400);
+                return;
+            }
+
+            morpionCurrentPlayer = morpionCurrentPlayer === 'X' ? 'O' : 'X';
+            document.getElementById('morpion-current-player').innerText = morpionCurrentPlayer;
+        }
+
+        function highlightWinningCells(combo) {
+            const cells = document.getElementsByClassName('morpion-cell');
+            combo.forEach(idx => {
+                cells[idx].classList.add('bg-emerald-100', 'dark:bg-emerald-900/60', 'ring-4', 'ring-emerald-400');
+            });
+        }
+
+        function aiMakeMove() {
+            if (!morpionGameActive) return;
+
+            let move;
+            if (morpionMode === 'easy') {
+                // Pick random available square
+                const emptyIndices = morpionBoard.map((val, idx) => val === '' ? idx : null).filter(val => val !== null);
+                move = emptyIndices[Math.floor(Math.random() * emptyIndices.length)];
+            } else {
+                // Minimax imbattable
+                move = getBestMove();
+            }
+
+            if (move !== undefined) {
+                makeMorpionMove(move, 'O');
+            }
+        }
+
+        function getBestMove() {
+            let bestScore = -Infinity;
+            let move;
+            for (let i = 0; i < 9; i++) {
+                if (morpionBoard[i] === '') {
+                    morpionBoard[i] = 'O';
+                    let score = minimax(morpionBoard, 0, false);
+                    morpionBoard[i] = '';
+                    if (score > bestScore) {
+                        bestScore = score;
+                        move = i;
+                    }
+                }
+            }
+            return move;
+        }
+
+        function minimax(board, depth, isMaximizing) {
+            const winner = checkWinnerForMinimax(board);
+            if (winner === 'O') return 10 - depth;
+            if (winner === 'X') return depth - 10;
+            if (!board.includes('')) return 0;
+
+            if (isMaximizing) {
+                let bestScore = -Infinity;
+                for (let i = 0; i < 9; i++) {
+                    if (board[i] === '') {
+                        board[i] = 'O';
+                        let score = minimax(board, depth + 1, false);
+                        board[i] = '';
+                        bestScore = Math.max(score, bestScore);
+                    }
+                }
+                return bestScore;
+            } else {
+                let bestScore = Infinity;
+                for (let i = 0; i < 9; i++) {
+                    if (board[i] === '') {
+                        board[i] = 'X';
+                        let score = minimax(board, depth + 1, true);
+                        board[i] = '';
+                        bestScore = Math.min(score, bestScore);
+                    }
+                }
+                return bestScore;
+            }
+        }
+
+        function checkWinnerForMinimax(board) {
+            for (let i = 0; i < winningConditions.length; i++) {
+                const [a, b, c] = winningConditions[i];
+                if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+                    return board[a];
+                }
+            }
+            return null;
+        }
+
+        function resetMorpionBoard() {
+            morpionBoard = ['', '', '', '', '', '', '', '', ''];
+            morpionGameActive = true;
+            morpionCurrentPlayer = 'X';
+            document.getElementById('morpion-current-player').innerText = 'X';
+
+            const cells = document.getElementsByClassName('morpion-cell');
+            Array.from(cells).forEach(cell => {
+                cell.innerText = '';
+                cell.className = 'morpion-cell rounded-xl bg-white dark:bg-slate-900 shadow hover:shadow-md transition flex items-center justify-center text-4xl sm:text-5xl font-black text-slate-700 dark:text-slate-200 focus:outline-none';
+            });
+        }
+
+        function updateMorpionScoreboard() {
+            document.getElementById('score-morpion-x').innerText = morpionScores.X;
+            document.getElementById('score-morpion-o').innerText = morpionScores.O;
+            document.getElementById('score-morpion-draw').innerText = morpionScores.draw;
+        }
+
+        function resetMorpionScores() {
+            playSound('click');
+            morpionScores = { X: 0, O: 0, draw: 0 };
+            updateMorpionScoreboard();
+            resetMorpionBoard();
+        }
+
+
+        /* ===================================================================
+           3. JEU DU PENDU (HANGMAN) LOGIC
+           =================================================================== */
+        const wordDatabase = {
+            animaux: ["ELEPHANT", "GIRAFE", "DAUPHIN", "CANGOUROU", "SERPENT", "PERROQUET", "CHIMPANZE", "TIGRE", "AUTRUCHE", "BALEINE"],
+            pays: ["FRANCE", "JAPON", "BRESIL", "CANADA", "AUSTRALIE", "EGYPTE", "ITALIE", "MEXIQUE", "NORVEGE", "MADAGASCAR"],
+            fruits: ["ANANAS", "PASTEQUE", "GROSEILLE", "FRAMBOISE", "AVOCAT", "BROCOLI", "CHAMPIGNON", "CITRON", "MANGUE", "BANANE"],
+            tech: ["ORDINATEUR", "CLAVIER", "INTERNET", "PROGRAMME", "ALGORITHME", "ECRAN", "SERVEUR", "APPLICATION", "SATELLITE", "ROBOT"],
+            metiers: ["POMPIER", "ARCHITECTE", "BOULANGER", "ASTRONAUTE", "MEDECIN", "PROFESSEUR", "DENTISTE", "JOURNALISTE", "PILOTE", "CUISINIER"]
+        };
+
+        let penduWord = "";
+        let penduGuessedLetters = [];
+        let penduMistakes = 0;
+        const maxPenduMistakes = 10;
+        let penduStreak = 0;
+        let hintUsed = false;
+
+        function initPenduGame() {
+            const categorySelect = document.getElementById('pendu-category-select').value;
+            let availableWords = [];
+
+            if (categorySelect === 'ALL') {
+                Object.values(wordDatabase).forEach(list => availableWords.push(...list));
+            } else {
+                availableWords = wordDatabase[categorySelect];
+            }
+
+            penduWord = availableWords[Math.floor(Math.random() * availableWords.length)];
+            penduGuessedLetters = [];
+            penduMistakes = 0;
+            hintUsed = false;
+
+            document.getElementById('pendu-hint-text').innerText = '';
+            document.getElementById('btn-hint').disabled = false;
+            document.getElementById('btn-hint').classList.remove('opacity-50');
+
+            renderPenduSVG();
+            renderPenduWord();
+            renderPenduKeyboard();
+        }
+
+        function renderPenduWord() {
+            const container = document.getElementById('pendu-word-container');
+            container.innerHTML = '';
+
+            let hasWon = true;
+
+            for (let letter of penduWord) {
+                const box = document.createElement('div');
+                box.className = 'w-9 h-12 sm:w-12 sm:h-14 border-b-4 border-indigo-500 dark:border-indigo-400 flex items-center justify-center font-extrabold text-2xl sm:text-3xl text-indigo-600 dark:text-indigo-300 bg-indigo-50/50 dark:bg-indigo-950/30 rounded-t-lg';
+                
+                if (penduGuessedLetters.includes(letter)) {
+                    box.innerText = letter;
+                    box.classList.add('animate-pop');
+                } else {
+                    box.innerText = '';
+                    hasWon = false;
+                }
+                container.appendChild(box);
+            }
+
+            if (hasWon && penduWord.length > 0) {
+                playSound('win');
+                penduStreak++;
+                document.getElementById('pendu-streak').innerText = `${penduStreak} 🔥`;
+                setTimeout(() => {
+                    showModal('Victoire ! 🎉', `Vous avez deviné le mot <strong>${penduWord}</strong> !`, '💡', initPenduGame);
+                }, 300);
+            }
+        }
+
+        function renderPenduKeyboard() {
+            const kb = document.getElementById('pendu-keyboard');
+            kb.innerHTML = '';
+
+            const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+            alphabet.forEach(letter => {
+                const btn = document.createElement('button');
+                btn.innerText = letter;
+                btn.id = `key-${letter}`;
+                
+                const isGuessed = penduGuessedLetters.includes(letter);
+                const isInWord = penduWord.includes(letter);
+
+                if (isGuessed) {
+                    if (isInWord) {
+                        btn.className = 'py-2 rounded-lg bg-emerald-500 text-white font-bold text-sm sm:text-base opacity-60 cursor-not-allowed';
+                    } else {
+                        btn.className = 'py-2 rounded-lg bg-rose-500 text-white font-bold text-sm sm:text-base opacity-40 cursor-not-allowed';
+                    }
+                    btn.disabled = true;
+                } else {
+                    btn.className = 'py-2 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-indigo-500 hover:text-white dark:hover:bg-indigo-600 text-slate-800 dark:text-slate-100 font-bold text-sm sm:text-base transition shadow-sm';
+                    btn.onclick = () => handlePenduGuess(letter);
+                }
+
+                kb.appendChild(btn);
+            });
+        }
+
+        function handlePenduGuess(letter) {
+            if (penduGuessedLetters.includes(letter) || penduMistakes >= maxPenduMistakes) return;
+
+            penduGuessedLetters.push(letter);
+
+            if (penduWord.includes(letter)) {
+                playSound('click');
+            } else {
+                playSound('wrong');
+                penduMistakes++;
+                renderPenduSVG();
+            }
+
+            renderPenduWord();
+            renderPenduKeyboard();
+
+            if (penduMistakes >= maxPenduMistakes) {
+                playSound('lose');
+                penduStreak = 0;
+                document.getElementById('pendu-streak').innerText = `0 🔥`;
+                setTimeout(() => {
+                    showModal('Dommage... 😢', `Le mot secret était : <strong>${penduWord}</strong>`, '🪢', initPenduGame);
+                }, 400);
+            }
+        }
+
+        function renderPenduSVG() {
+            for (let i = 1; i <= maxPenduMistakes; i++) {
+                const el = document.getElementById(`hang-${i}`);
+                if (el) {
+                    if (i <= penduMistakes) {
+                        el.classList.remove('opacity-10');
+                        el.classList.add('opacity-100', 'draw-svg');
+                    } else {
+                        el.classList.remove('opacity-100', 'draw-svg');
+                        el.classList.add('opacity-10');
+                    }
+                }
+            }
+        }
+
+        function usePenduHint() {
+            if (hintUsed || penduMistakes >= maxPenduMistakes - 1) return;
+            
+            // Find unrevealed letters
+            const unrevealed = penduWord.split('').filter(char => !penduGuessedLetters.includes(char));
+            if (unrevealed.length > 0) {
+                hintUsed = true;
+                const randomLetter = unrevealed[Math.floor(Math.random() * unrevealed.length)];
+                
+                penduMistakes++;
+                renderPenduSVG();
+                
+                document.getElementById('pendu-hint-text').innerText = `Indice : La lettre "${randomLetter}" est présente !`;
+                document.getElementById('btn-hint').disabled = true;
+                document.getElementById('btn-hint').classList.add('opacity-50');
+
+                handlePenduGuess(randomLetter);
+            }
+        }
+
+        /* Physical Keyboard Listener */
+        window.addEventListener('keydown', (e) => {
+            if (currentGame === 'pendu') {
+                const key = e.key.toUpperCase();
+                if (/^[A-Z]$/.test(key)) {
+                    handlePenduGuess(key);
+                }
+            }
+        });
+
+        /* Initialize icon renderer and default game on load */
+        window.onload = function() {
+            lucide.createIcons();
+            initPenduGame();
+        };
+    </script>
+</body>
+</html>
